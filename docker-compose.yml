@@ -1,0 +1,136 @@
+services:
+    # ── PHP-FPM application ──────────────────────────────────────
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: ayadatypro_app
+        restart: unless-stopped
+        working_dir: /var/www
+        env_file: .env # reads .env directly — no shell export needed
+        volumes:
+            - .:/var/www
+            - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+        networks:
+            - ayadatypro_network
+        depends_on:
+            postgres:
+                condition: service_healthy # wait for postgres to be ready, not just started
+            redis:
+                condition: service_healthy # wait for redis to be ready
+
+    # ── Nginx ────────────────────────────────────────────────────
+    nginx:
+        image: nginx:alpine
+        container_name: ayadatypro_nginx
+        restart: unless-stopped
+        ports:
+            - "8000:80"
+        volumes:
+            - .:/var/www
+            - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+        networks:
+            - ayadatypro_network
+        depends_on:
+            - app
+
+    # ── PostgreSQL ───────────────────────────────────────────────
+    postgres:
+        image: postgres:16-alpine
+        container_name: ayadatypro_postgres
+        restart: unless-stopped
+        env_file: .env # reads DB_DATABASE, DB_USERNAME, DB_PASSWORD
+        environment:
+            POSTGRES_DB: ${DB_DATABASE:-ayadatypro}
+            POSTGRES_USER: ${DB_USERNAME:-ayadatypro}
+            POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+        networks:
+            - ayadatypro_network
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    "pg_isready -U ${DB_USERNAME:-ayadatypro} -d ${DB_DATABASE:-ayadatypro}",
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+            start_period: 10s
+
+    # ── Redis ────────────────────────────────────────────────────
+    redis:
+        image: redis:7-alpine
+        container_name: ayadatypro_redis
+        restart: unless-stopped
+        volumes:
+            - redis_data:/data # persist sessions, cache, queued jobs
+        networks:
+            - ayadatypro_network
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 5s
+            timeout: 3s
+            retries: 10
+
+    # ── Mailpit (local email UI) ─────────────────────────────────
+    mailpit:
+        image: axllent/mailpit:latest
+        container_name: ayadatypro_mailpit
+        restart: unless-stopped
+        ports:
+            - "8025:8025" # Web UI  → http://localhost:8025
+            - "1025:1025" # SMTP
+        networks:
+            - ayadatypro_network
+
+    # ── Laravel Reverb (WebSockets) ──────────────────────────────
+    reverb:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: ayadatypro_reverb
+        restart: unless-stopped
+        working_dir: /var/www
+        command: php artisan reverb:start --host=0.0.0.0 --port=8080
+        env_file: .env
+        ports:
+            - "8080:8080"
+        volumes:
+            - .:/var/www
+        networks:
+            - ayadatypro_network
+        depends_on:
+            app:
+                condition: service_started
+            redis:
+                condition: service_healthy # Reverb needs Redis for pub/sub
+
+    # ── Laravel Horizon (queue dashboard) ────────────────────────
+    horizon:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: ayadatypro_horizon
+        restart: unless-stopped
+        working_dir: /var/www
+        command: php artisan horizon
+        env_file: .env
+        volumes:
+            - .:/var/www
+        networks:
+            - ayadatypro_network # was missing — couldn't reach Redis
+        depends_on:
+            app:
+                condition: service_started
+            redis:
+                condition: service_healthy
+
+volumes:
+    postgres_data:
+    redis_data: # new — persists Redis data across restarts
+
+networks:
+    ayadatypro_network:
+        driver: bridge
