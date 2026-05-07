@@ -9,13 +9,14 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
+# Match the host user UID/GID so volume mounts are writable
+RUN usermod -u 1000 www-data && groupmod -g 1000 www-data
+
 WORKDIR /var/www
 
-COPY . .
+COPY --chown=www-data:www-data . .
 
 RUN composer install --no-interaction --prefer-dist --optimize-autoloader
-
-RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
 EXPOSE 9000
 CMD ["php-fpm"]

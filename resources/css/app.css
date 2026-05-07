@@ -1,11 +1,155 @@
-@import 'tailwindcss';
+/* resources/css/app.css */
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
-@source '../**/*.blade.php';
-@source '../**/*.js';
+@import "tailwindcss";
 
+/* ── Arabic Fonts ──────────────────────────────────────────── */
+@import url("https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@100..900&family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap");
+
+/* ── Tailwind v4 Theme ─────────────────────────────────────── */
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    /* Fonts */
+    --font-display: "Noto Kufi Arabic", "Noto Sans Arabic", sans-serif;
+    --font-body: "Noto Sans Arabic", sans-serif;
+    --font-sans: "Noto Sans Arabic", sans-serif;
+
+    /* Brand Colors — Medical teal/green palette */
+    --color-primary-50: #f0fdfa;
+    --color-primary-100: #ccfbf1;
+    --color-primary-200: #99f6e4;
+    --color-primary-300: #5eead4;
+    --color-primary-400: #2dd4bf;
+    --color-primary-500: #14b8a6;
+    --color-primary-600: #0d9488;
+    --color-primary-700: #0f766e;
+    --color-primary-800: #115e59;
+    --color-primary-900: #134e4a;
+    --color-primary-950: #042f2e;
+
+    --color-secondary-50: #f8fafc;
+    --color-secondary-100: #f1f5f9;
+    --color-secondary-200: #e2e8f0;
+    --color-secondary-500: #64748b;
+    --color-secondary-700: #334155;
+    --color-secondary-900: #0f172a;
+
+    /* Status colors */
+    --color-scheduled: #3b82f6; /* blue */
+    --color-confirmed: #8b5cf6; /* violet */
+    --color-in-progress: #f59e0b; /* amber */
+    --color-completed: #10b981; /* emerald */
+    --color-cancelled: #ef4444; /* red */
+    --color-no-show: #6b7280; /* gray */
+
+    /* Radius */
+    --radius-card: 0.75rem;
+    --radius-button: 0.5rem;
+}
+
+/* ── Base Styles ───────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    font-family: var(--font-body);
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* RTL text alignment baseline */
+[dir="rtl"] {
+    text-align: right;
+}
+
+/* ── Appointment status badge utilities ────────────────────── */
+.status-scheduled {
+    @apply bg-blue-100 text-blue-700 border border-blue-200;
+}
+.status-confirmed {
+    @apply bg-violet-100 text-violet-700 border border-violet-200;
+}
+.status-in_progress {
+    @apply bg-amber-100 text-amber-700 border border-amber-200;
+}
+.status-completed {
+    @apply bg-emerald-100 text-emerald-700 border border-emerald-200;
+}
+.status-cancelled {
+    @apply bg-red-100 text-red-700 border border-red-200;
+}
+.status-no_show {
+    @apply bg-gray-100 text-gray-600 border border-gray-200;
+}
+
+/* ── Card component ────────────────────────────────────────── */
+.card {
+    @apply bg-white rounded-xl border border-gray-100 shadow-sm;
+}
+
+.card-hover {
+    @apply bg-white rounded-xl border border-gray-100 shadow-sm transition-shadow duration-200 hover:shadow-md;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+.sidebar-link {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium
+         text-gray-600 hover:bg-primary-50 hover:text-primary-700
+         transition-colors duration-150;
+}
+
+.sidebar-link.active {
+    @apply bg-primary-50 text-primary-700;
+}
+
+/* ── Form inputs with RTL labels ───────────────────────────── */
+.form-label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+}
+
+.form-input {
+    @apply block w-full rounded-lg border border-gray-300 px-3 py-2
+         text-sm text-gray-900 placeholder-gray-400
+         focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500
+         disabled:bg-gray-50 disabled:text-gray-400;
+}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+         bg-primary-600 text-white hover:bg-primary-700
+         focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
+         transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+         bg-white text-gray-700 border border-gray-300 hover:bg-gray-50
+         focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2
+         transition-colors duration-150;
+}
+
+.btn-danger {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+         bg-red-600 text-white hover:bg-red-700
+         focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2
+         transition-colors duration-150;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }

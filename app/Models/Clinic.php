@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Clinic extends Model
@@ -20,11 +21,19 @@ class Clinic extends Model
         'subscription_plan',
         'trial_ends_at',
         'is_active',
+        'is_setup_complete',
+        'timezone',
+        'locale',
+        'currency',
+        'week_start',
     ];
+
     protected $casts = [
         'trial_ends_at' => 'datetime',
-        'is_active'     => 'boolean',
+        'is_active' => 'boolean',
+        'is_setup_complete' => 'boolean',
     ];
+
     // ── Plan helpers ──────────────────────────────────────────
     public function isOnPlan(string $plan): bool
     {
@@ -34,10 +43,10 @@ class Clinic extends Model
     public function canAddDoctor(): bool
     {
         return match ($this->subscription_plan) {
-            'free'   => $this->users()->doctors()->count() < 1,
+            'free' => $this->users()->doctors()->count() < 1,
             'clinic' => $this->users()->doctors()->count() < 3,
-            'chain'  => true,
-            default  => false,
+            'chain' => true,
+            default => false,
         };
     }
 
@@ -80,5 +89,21 @@ class Clinic extends Model
     public function activeSubscription()
     {
         return $this->hasOne(Subscription::class)->latestOfMany();
+    }
+
+    public function settings(): HasOne
+    {
+        return $this->hasOne(ClinicSetting::class);
+    }
+
+    // Helper — returns settings or sensible defaults if not yet created
+    public function getEffectiveSettings(): ClinicSetting
+    {
+        return $this->settings ?? new ClinicSetting([
+            'appointment_duration' => 20,
+            'buffer_time' => 5,
+            'allow_online_booking' => true,
+            'require_approval_for_new_patients' => false,
+        ]);
     }
 }

@@ -6,11 +6,12 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -31,13 +32,15 @@ class User extends Authenticatable
         'is_active',
         'google_id',
     ];
+
     protected $hidden = ['password', 'remember_token'];
+
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'is_active'         => 'boolean',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -46,14 +49,22 @@ class User extends Authenticatable
     {
         return $this->role === 'owner';
     }
+
     public function isDoctor(): bool
     {
         return $this->role === 'doctor';
     }
+
     public function isReceptionist(): bool
     {
         return $this->role === 'receptionist';
     }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'superadmin';
+    }
+
     // ── Scopes ────────────────────────────────────────────────
     public function scopeDoctors(Builder $query): Builder
     {
@@ -79,5 +90,15 @@ class User extends Authenticatable
     public function schedules()
     {
         return $this->hasMany(DoctorSchedule::class, 'doctor_id');
+    }
+
+    public function consents(): HasMany
+    {
+        return $this->hasMany(UserConsent::class);
+    }
+
+    public function latestConsent()
+    {
+        return $this->hasOne(UserConsent::class)->latestOfMany('accepted_at');
     }
 }

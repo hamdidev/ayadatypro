@@ -25,7 +25,9 @@
         "@tiptap/react": "^3.22.4",
         "@tiptap/starter-kit": "^3.22.4",
         "@vitejs/plugin-react": "^6.0.1",
+        "axios": "^1.16.0",
         "lucide-react": "^1.11.0",
-        "recharts": "^3.8.1"
+        "recharts": "^3.8.1",
+        "use-debounce": "^10.1.1"
     }
 }

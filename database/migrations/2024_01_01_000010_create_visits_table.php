@@ -6,30 +6,28 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('visits', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('clinic_id')->constrained()->cascadeOnDelete();
             $table->foreignId('appointment_id')->nullable()->constrained()->nullOnDelete();
-            $table->foreignId('patient_id')->constrained('patients');
+            $table->foreignId('patient_id')->constrained('patients')->cascadeOnDelete();
             $table->foreignId('doctor_id')->constrained('users');
-            $table->foreignId('clinic_id')->constrained();
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->text('chief_complaint')->nullable();
             $table->text('diagnosis')->nullable();
-            $table->longText('notes')->nullable(); // TipTap HTML
+            $table->text('notes')->nullable();
             $table->date('follow_up_date')->nullable();
             $table->timestamps();
 
-            $table->index(['clinic_id', 'patient_id']);
+            $table->index(['patient_id', 'created_at']);
+            $table->index(['doctor_id', 'created_at']);
+            $table->index(['clinic_id', 'created_at']);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('visits');
