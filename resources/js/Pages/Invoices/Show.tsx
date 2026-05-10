@@ -1,5 +1,5 @@
 import { Head, Link, useForm, router } from "@inertiajs/react";
-import AppLayout from "../../Layouts/AppLayout";
+import AppLayout from "@/Layouts/AppLayout";
 import { usePage } from "@inertiajs/react";
 import type { PageProps } from "@/types";
 import { ChevronLeft, Printer, Edit, Trash2, Plus } from "lucide-react";

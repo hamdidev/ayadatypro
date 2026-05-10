@@ -1,9 +1,9 @@
 <?php
 
+
 namespace App\Events;
 
 use App\Models\Appointment;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -16,14 +16,10 @@ class AppointmentStatusChanged implements ShouldBroadcast
 
     public function __construct(
         public readonly Appointment $appointment,
-        public readonly string $oldStatus,
-        public readonly string $newStatus,
+        public readonly string      $oldStatus,
+        public readonly string      $newStatus,
     ) {}
 
-    /**
-     * Broadcast on a private clinic channel so only clinic staff receive it.
-     * Frontend subscribes to: private-clinic.{clinicId}
-     */
     public function broadcastOn(): array
     {
         return [
@@ -40,10 +36,13 @@ class AppointmentStatusChanged implements ShouldBroadcast
     {
         return [
             'appointment_id' => $this->appointment->id,
-            'patient_name' => $this->appointment->patient->name,
-            'old_status' => $this->oldStatus,
-            'new_status' => $this->newStatus,
-            'starts_at' => $this->appointment->starts_at->toISOString(),
+            'patient_name'   => $this->appointment->patient->name,
+            'doctor_name'    => $this->appointment->doctor->name,
+            'doctor_id'      => $this->appointment->doctor_id,
+            'old_status'     => $this->oldStatus,
+            'new_status'     => $this->newStatus,
+            'starts_at'      => $this->appointment->starts_at->format('H:i'),
+            'type'           => $this->appointment->type,
         ];
     }
 }

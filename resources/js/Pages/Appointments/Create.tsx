@@ -1,12 +1,11 @@
 // resources/js/Pages/Appointments/Create.tsx
 
 import { Head, useForm, router } from "@inertiajs/react";
-
+import AppLayout from "@/Layouts/AppLayout";
 import { useState, useEffect } from "react";
 import { Search, User } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import axios from "axios";
-import AppLayout from "../../Layouts/AppLayout";
 
 interface Doctor {
     id: number;
@@ -77,6 +76,35 @@ export default function AppointmentCreate({
             setSearching(false);
         }
     }, 300);
+
+    const loadSlots = useDebouncedCallback(
+        async (doctorId: string, date: string) => {
+            if (!doctorId || !date) return;
+            try {
+                // ✅ correct endpoint — /appointments/slots not /book/{slug}/slots
+                const res = await axios.get("/appointments/slots", {
+                    params: { doctor_id: doctorId, date },
+                });
+                // Auto-calculate ends_at from first available slot duration
+                if (res.data.length > 0) {
+                    const first = res.data[0];
+                    const duration =
+                        new Date(first.ends_at).getTime() -
+                        new Date(first.starts_at).getTime();
+                    if (data.start_time) {
+                        const start = new Date(`${date}T${data.start_time}`);
+                        const end = new Date(start.getTime() + duration);
+                        const endH = String(end.getHours()).padStart(2, "0");
+                        const endM = String(end.getMinutes()).padStart(2, "0");
+                        setData("ends_at", `${date} ${endH}:${endM}`);
+                    }
+                }
+            } catch {
+                // silently fail — user can still pick time manually
+            }
+        },
+        300,
+    );
 
     const selectPatient = (patient: PatientResult) => {
         setData("patient_id", patient.id.toString());

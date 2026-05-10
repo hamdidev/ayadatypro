@@ -6,6 +6,8 @@ use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use App\Models\Patient;
 use App\Models\User;
+use App\Services\AppointmentService;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -14,13 +16,20 @@ use Inertia\Response;
 
 class AppointmentController extends Controller
 {
+    public function __construct(
+        private readonly AppointmentService $appointmentService,
+    ) {}
+
     public function index(Request $request): Response
     {
         $appointments = Appointment::with(['patient', 'doctor'])
-            ->when($request->date, fn($q) => $q->whereDate('starts_at', $request->date))
+            ->when($request->date,      fn($q) => $q->whereDate('starts_at', $request->date))
             ->when($request->doctor_id, fn($q) => $q->where('doctor_id', $request->doctor_id))
-            ->when($request->status, fn($q) => $q->where('status', $request->status))
-            ->when(! $request->date && ! $request->status, fn($q) => $q->whereDate('starts_at', '>=', today()))
+            ->when($request->status,    fn($q) => $q->where('status', $request->status))
+            ->when(
+                ! $request->date && ! $request->status,
+                fn($q) => $q->whereDate('starts_at', '>=', today())
+            )
             ->orderBy('starts_at')
             ->paginate(25)
             ->withQueryString()
@@ -53,23 +62,62 @@ class AppointmentController extends Controller
 
     public function create(Request $request): Response
     {
-        $doctors = User::where('clinic_id', auth()->user()->clinic_id)
+        $clinic  = auth()->user()->clinic;
+        $doctors = User::where('clinic_id', $clinic->id)
             ->doctors()
+            ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'specialty']);
 
-        // Pre-select patient if coming from patient profile
-        $patient = null;
-        if ($request->patient_id) {
-            $patient = Patient::find($request->patient_id, ['id', 'name', 'phone']);
-        }
+        $patient = $request->patient_id
+            ? Patient::find($request->patient_id, ['id', 'name', 'phone'])
+            : null;
+
+        // Pre-load available slots for the default doctor + date
+        // so the form shows slots immediately without an API call
+        $defaultDate   = $request->date ?? today()->format('Y-m-d');
+        $defaultDoctor = $doctors->first();
+
+        $slots = $defaultDoctor
+            ? $this->appointmentService->getAvailableSlots(
+                $defaultDoctor,
+                Carbon::parse($defaultDate)
+            )
+            : collect();
 
         return Inertia::render('Appointments/Create', [
-            'doctors'        => $doctors,
+            'doctors'            => $doctors,
             'preselectedPatient' => $patient,
-            'defaultDate'    => $request->date ?? today()->format('Y-m-d'),
-            'slotDuration'   => auth()->user()->clinic->settings?->appointment_duration ?? 20,
+            'defaultDate'        => $defaultDate,
+            'defaultSlots'       => $slots->values(),
+            'slotDuration'       => $clinic->settings?->appointment_duration ?? 20,
         ]);
+    }
+
+    /**
+     * API endpoint — returns available slots for a doctor + date.
+     * Called by the Create/Edit form when doctor or date changes.
+     */
+    public function slots(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $data = $request->validate([
+            'doctor_id' => 'required|integer|exists:users,id',
+            'date'      => 'required|date',
+            'exclude_id' => 'nullable|integer',
+        ]);
+
+        $doctor = User::findOrFail($data['doctor_id']);
+
+        // Ensure doctor belongs to same clinic
+        abort_unless($doctor->clinic_id === auth()->user()->clinic_id, 403);
+
+        $slots = $this->appointmentService->getAvailableSlots(
+            $doctor,
+            Carbon::parse($data['date']),
+            excludeAppointmentId: $data['exclude_id'] ?? null,
+        );
+
+        return response()->json($slots->values());
     }
 
     public function store(Request $request): RedirectResponse
@@ -83,17 +131,15 @@ class AppointmentController extends Controller
             'notes'      => ['nullable', 'string', 'max:1000'],
         ]);
 
-        // Check for conflicts before saving
-        // (Appointment model also validates on saving hook)
-        $conflict = Appointment::withoutGlobalScope('clinic')
-            ->scopeConflictingWith(
-                query: Appointment::query(),
-                doctorId: $data['doctor_id'],
-                starts: now()->parse($data['starts_at']),
-                ends: now()->parse($data['ends_at']),
-            )->exists();
+        $doctor = User::findOrFail($data['doctor_id']);
 
-        if ($conflict) {
+        $available = $this->appointmentService->isSlotAvailable(
+            $doctor,
+            Carbon::parse($data['starts_at']),
+            Carbon::parse($data['ends_at']),
+        );
+
+        if (! $available) {
             return back()->withErrors([
                 'starts_at' => 'يوجد تعارض مع موعد آخر للطبيب في هذا الوقت.',
             ]);
@@ -117,31 +163,29 @@ class AppointmentController extends Controller
 
         return Inertia::render('Appointments/Show', [
             'appointment' => [
-                'id'         => $appointment->id,
-                'status'     => $appointment->status->value,
+                'id'           => $appointment->id,
+                'status'       => $appointment->status->value,
                 'status_badge' => $appointment->status_badge,
-                'type'       => $appointment->type,
-                'starts_at'  => $appointment->starts_at->format('Y-m-d H:i'),
-                'ends_at'    => $appointment->ends_at->format('H:i'),
-                'duration'   => $appointment->duration_minutes,
-                'notes'      => $appointment->notes,
-                'is_past'    => $appointment->isPast(),
+                'type'         => $appointment->type,
+                'starts_at'    => $appointment->starts_at->format('Y-m-d H:i'),
+                'ends_at'      => $appointment->ends_at->format('H:i'),
+                'duration'     => $appointment->duration_minutes,
+                'notes'        => $appointment->notes,
+                'is_past'      => $appointment->isPast(),
 
                 'patient' => [
                     'id'    => $appointment->patient->id,
                     'name'  => $appointment->patient->name,
                     'phone' => $appointment->patient->phone,
                 ],
-
                 'doctor' => [
                     'id'   => $appointment->doctor->id,
                     'name' => $appointment->doctor->name,
                 ],
 
                 'created_by' => $appointment->createdBy?->name,
-
-                'has_visit' => $appointment->visit !== null,
-                'visit_id'  => $appointment->visit?->id,
+                'has_visit'  => $appointment->visit !== null,
+                'visit_id'   => $appointment->visit?->id,
 
                 'allowed_transitions' => collect(
                     Appointment::TRANSITIONS[$appointment->status->value] ?? []
@@ -175,6 +219,13 @@ class AppointmentController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        // Pre-load slots for the current doctor + date (excluding this appointment)
+        $slots = $this->appointmentService->getAvailableSlots(
+            User::find($appointment->doctor_id),
+            $appointment->starts_at->toMutable(),
+            excludeAppointmentId: $appointment->id,
+        );
+
         return Inertia::render('Appointments/Edit', [
             'appointment' => [
                 'id'         => $appointment->id,
@@ -186,7 +237,8 @@ class AppointmentController extends Controller
                 'type'       => $appointment->type,
                 'notes'      => $appointment->notes,
             ],
-            'doctors' => $doctors,
+            'doctors'     => $doctors,
+            'defaultSlots' => $slots->values(),
         ]);
     }
 
@@ -206,17 +258,15 @@ class AppointmentController extends Controller
             'notes'     => ['nullable', 'string', 'max:1000'],
         ]);
 
-        // Conflict check excluding this appointment
-        $conflict = Appointment::query()
-            ->scopeConflictingWith(
-                query: Appointment::query(),
-                doctorId: $data['doctor_id'],
-                starts: now()->parse($data['starts_at']),
-                ends: now()->parse($data['ends_at']),
-                excludeId: $appointment->id,
-            )->exists();
+        $doctor    = User::findOrFail($data['doctor_id']);
+        $available = $this->appointmentService->isSlotAvailable(
+            $doctor,
+            Carbon::parse($data['starts_at']),
+            Carbon::parse($data['ends_at']),
+            excludeId: $appointment->id,
+        );
 
-        if ($conflict) {
+        if (! $available) {
             return back()->withErrors([
                 'starts_at' => 'يوجد تعارض مع موعد آخر للطبيب في هذا الوقت.',
             ]);
@@ -228,9 +278,6 @@ class AppointmentController extends Controller
             ->with('success', 'تم تحديث الموعد.');
     }
 
-    /**
-     * Transition appointment status via state machine.
-     */
     public function updateStatus(Request $request, Appointment $appointment): RedirectResponse
     {
         $this->authorize('update', $appointment);
@@ -252,6 +299,47 @@ class AppointmentController extends Controller
         }
 
         return back()->with('success', 'تم تحديث حالة الموعد.');
+    }
+
+    /**
+     * Calendar view — loads all appointments for the current week/month
+     * as flat data; FullCalendar handles the rendering client-side.
+     */
+    public function calendar(Request $request): Response
+    {
+        $clinic = auth()->user()->clinic;
+
+        // Load 60 days of appointments — enough for month view + buffer
+        $appointments = Appointment::with(['patient', 'doctor'])
+            ->when($request->doctor_id, fn($q) => $q->where('doctor_id', $request->doctor_id))
+            ->whereBetween('starts_at', [
+                now()->subDays(7),
+                now()->addDays(60),
+            ])
+            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->orderBy('starts_at')
+            ->get()
+            ->map(fn(Appointment $a) => [
+                'id'        => $a->id,
+                'patient'   => $a->patient->name,
+                'doctor'    => $a->doctor->name,
+                'doctor_id' => $a->doctor_id,
+                'starts_at' => $a->starts_at->toIso8601String(),
+                'ends_at'   => $a->ends_at->toIso8601String(),
+                'status'    => $a->status->value,
+                'type'      => $a->type,
+            ]);
+
+        $doctors = User::where('clinic_id', $clinic->id)
+            ->doctors()
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return Inertia::render('Appointments/Calendar', [
+            'appointments' => $appointments,
+            'doctors'      => $doctors,
+            'filters'      => $request->only(['doctor_id']),
+        ]);
     }
 
     public function destroy(Appointment $appointment): RedirectResponse

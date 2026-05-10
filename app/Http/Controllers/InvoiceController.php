@@ -264,6 +264,19 @@ class InvoiceController extends Controller
 
         return back()->with('success', 'تم تسجيل الدفعة بنجاح.');
     }
+    public function pdf(Invoice $invoice): \Illuminate\Http\Response
+    {
+        $this->authorize('view', $invoice);
+
+        $invoice->load(['patient', 'clinic', 'items', 'appointment']);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.invoice', compact('invoice'))
+            ->setPaper('a4', 'portrait');
+
+        $filename = 'invoice-' . $invoice->number . '.pdf';
+
+        return $pdf->download($filename);
+    }
 
     public function destroy(Invoice $invoice): RedirectResponse
     {
