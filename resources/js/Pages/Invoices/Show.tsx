@@ -2,7 +2,14 @@ import { Head, Link, useForm, router } from "@inertiajs/react";
 import AppLayout from "@/Layouts/AppLayout";
 import { usePage } from "@inertiajs/react";
 import type { PageProps } from "@/types";
-import { ChevronLeft, Printer, Edit, Trash2, Plus } from "lucide-react";
+import {
+    ChevronLeft,
+    Printer,
+    Edit,
+    Trash2,
+    Plus,
+    Download,
+} from "lucide-react";
 import { useState } from "react";
 
 interface Item {
@@ -287,7 +294,15 @@ export default function InvoiceShow({
                             <Printer size={15} />
                             طباعة
                         </button>
-
+                        <a
+                            href={`/invoices/${invoice.id}/pdf`}
+                            className="btn-secondary w-full justify-center"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <Download size={15} />
+                            تحميل PDF
+                        </a>
                         {/* Edit */}
                         {invoice.status !== "paid" && (
                             <Link

@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Prescription extends Model
 {
@@ -12,29 +11,31 @@ class Prescription extends Model
         'visit_id',
         'patient_id',
         'doctor_id',
+        'clinic_id',
+        'medication_name',
+        'dosage',
+        'frequency',
+        'duration',
         'instructions',
-        'issued_at',
+        'is_active',
     ];
 
     protected $casts = [
-        'issued_at' => 'datetime',
+        'is_active' => 'boolean',
     ];
 
     public function visit(): BelongsTo
     {
         return $this->belongsTo(Visit::class);
     }
+
     public function patient(): BelongsTo
     {
         return $this->belongsTo(Patient::class);
     }
+
     public function doctor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'doctor_id');
-    }
-
-    public function items(): HasMany
-    {
-        return $this->hasMany(PrescriptionItem::class);
     }
 }

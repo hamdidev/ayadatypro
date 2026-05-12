@@ -9,6 +9,7 @@ use App\Models\PrescriptionItem;
 use App\Models\Visit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -277,15 +278,15 @@ class VisitController extends Controller
 
     public function sign(Visit $visit): RedirectResponse
     {
-        $this->authorize('sign', $visit);
+        $this->authorize('update', $visit);
 
-        try {
-            $visit->sign(auth()->user());
-        } catch (\RuntimeException $e) {
-            return back()->withErrors(['visit' => $e->getMessage()]);
+        if ($visit->is_signed) {
+            return back()->with('error', 'الزيارة موقّعة بالفعل.');
         }
 
-        return back()->with('success', 'تم توقيع سجل الزيارة وإقفاله.');
+        $visit->sign(Auth::id());
+
+        return back()->with('success', 'تم توقيع الزيارة بنجاح.');
     }
 
     public function destroy(Visit $visit): RedirectResponse

@@ -1,3 +1,87 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What This Project Is
+
+**AyadatyPro** is a multi-tenant clinic management SaaS for Arabic-speaking healthcare providers (GCC region). Each `Clinic` is an isolated tenant. Users belong to a clinic with one of three roles: `owner`, `doctor`, or `receptionist`. Subscription tiers are `free`, `clinic`, and `chain`.
+
+## Commands
+
+```bash
+# Full dev stack (server + queue + logs + vite) — preferred
+composer run dev
+
+# Docker-based (app runs at http://localhost:8000)
+docker compose up -d
+docker compose exec app php artisan migrate
+
+# Individual services
+php artisan serve
+php artisan queue:listen --tries=1
+npm run dev
+
+# Tests
+php artisan test --compact
+php artisan test --compact --filter=TestName
+
+# Format PHP after any edits
+vendor/bin/pint --dirty
+
+# Fresh DB (destroys all data)
+php artisan migrate:fresh --seed
+```
+
+## Architecture
+
+### Multi-Tenancy
+
+Every tenant-scoped model (`Patient`, `Appointment`, `Visit`, `Invoice`) has a **global scope** that automatically filters by `clinic_id` based on `auth()->user()->clinic_id`. This is applied in each model's `boot()` method. Never manually add `where('clinic_id', ...)` — the scope handles it. To bypass (super-admin only), use `Model::withoutGlobalScope(ClinicScope::class)`.
+
+### Capability Flags (not raw roles)
+
+Authorization uses **capability flags**, not role strings. `HandleInertiaRequests` computes `auth.user.can` and shares it with every page. Always gate UI on `can.*` flags, never on `auth.user.role`. Backend uses `Gate::define()` in `AppServiceProvider` and `$this->authorize()` in controllers.
+
+The `Can` TypeScript interface in `resources/js/types/index.d.ts` is the source of truth for frontend checks.
+
+### Inertia + React
+
+- All pages live in `resources/js/Pages/`
+- Every authenticated page wraps content in `<AppLayout title="...">` (`resources/js/Layouts/AppLayout.tsx`)
+- Shared props (`auth`, `clinic`, `flash`, `features`) come from `HandleInertiaRequests::share()`
+- Flash messages (`back()->with('success', ...)`) are automatically displayed by `AppLayout`
+- File uploads require `{ forceFormData: data.file !== null }` — only force FormData when a file is actually selected, otherwise use default JSON
+
+### Sensitive Data
+
+Patient fields `national_id`, `notes`, `allergies`, and `chronic_conditions` are **encrypted at rest** via Eloquent casts. Never access them via raw SQL — always go through the model.
+
+## Known Incomplete Features
+
+These are broken or unimplemented — don't reference them as working:
+
+- **Visits** — missing 5 DB columns (`diagnosis_code`, `diagnosis_free_text`, `is_signed`, `signed_at`, `signed_by`) and all 4 frontend pages (`Visits/Index`, `Create`, `Show`, `Edit`)
+- **Auth/ClinicSetup.tsx** — Google OAuth new-user flow breaks (page missing)
+- **Appointments/Edit.tsx** — appointment editing page missing
+- **Prescription model** — empty stub (`app/Models/Prescription.php`)
+- **Attachment model** — empty stub (`app/Models/Attachment.php`)
+- **BillingController** — all methods return 501 (Phase 4 Stripe integration)
+
+## Key Dependencies
+
+- **barryvdh/laravel-dompdf** — PDF generation (invoices)
+- **vonage/client** — SMS reminders (toggled by `features.sms_reminders`)
+- **@fullcalendar/react** — appointment calendar UI
+- **@tiptap/react** — rich text editor (visit notes)
+- **recharts** — charts on dashboard
+- **laravel/reverb** + **laravel-echo** — real-time WebSocket events (port 8080 in Docker)
+
+## Docker
+
+Services: `app` (PHP-FPM), `nginx` (:8000), `postgres` (:5433 on host), `redis`, `mailpit` (:8025), `reverb` (:8080), `horizon`.
+
+DB connects internally as `postgres:5432`. The host-side port is `5433` (for DB clients like VS Code Database Client).
+
 <laravel-boost-guidelines>
 === foundation rules ===
 
@@ -11,6 +95,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 
 - php - 8.4
 - inertiajs/inertia-laravel (INERTIA_LARAVEL) - v3
+- laravel/cashier (CASHIER) - v16
 - laravel/framework (LARAVEL) - v13
 - laravel/horizon (HORIZON) - v5
 - laravel/prompts (PROMPTS) - v0
@@ -30,6 +115,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 
 This project has domain-specific skills available. You MUST activate the relevant skill whenever you work in that domain—don't wait until you're stuck.
 
+- `cashier-stripe-development` — Handles Laravel Cashier Stripe integration including subscriptions, webhooks, Stripe Checkout, invoices, charges, refunds, trials, coupons, metered billing, and payment failure handling. Triggered when a user mentions Cashier, Billable, IncompletePayment, stripe_id, newSubscription, Stripe subscriptions, or billing. Also applies when setting up webhooks, handling SCA/3DS payment failures, testing with Stripe test cards, or troubleshooting incomplete subscriptions, CSRF webhook errors, or migration publish issues.
 - `laravel-best-practices` — Apply this skill whenever writing, reviewing, or refactoring Laravel PHP code. This includes creating or modifying controllers, models, migrations, form requests, policies, jobs, scheduled commands, service classes, and Eloquent queries. Triggers for N+1 and query performance issues, caching strategies, authorization and security patterns, validation, error handling, queue and job configuration, route definitions, and architectural decisions. Also use for Laravel code reviews and refactoring existing Laravel code to follow best practices. Covers any task involving Laravel backend PHP code patterns.
 - `configuring-horizon` — Use this skill whenever the user mentions Horizon by name in a Laravel context. Covers the full Horizon lifecycle: installing Horizon (horizon:install, Sail setup), configuring config/horizon.php (supervisor blocks, queue assignments, balancing strategies, minProcesses/maxProcesses), fixing the dashboard (authorization via Gate::define viewHorizon, blank metrics, horizon:snapshot scheduling), and troubleshooting production issues (worker crashes, timeout chain ordering, LongWaitDetected notifications, waits config). Also covers job tagging and silencing. Do not use for generic Laravel queues without Horizon, SQS or database drivers, standalone Redis setup, Linux supervisord, Telescope, or job batching.
 - `socialite-development` — Manages OAuth social authentication with Laravel Socialite. Activate when adding social login providers; configuring OAuth redirect/callback flows; retrieving authenticated user details; customizing scopes or parameters; setting up community providers; testing with Socialite fakes; or when the user mentions social login, OAuth, Socialite, or third-party authentication.

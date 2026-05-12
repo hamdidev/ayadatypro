@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\AvatarController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\BookingPortalController;
+use App\Http\Controllers\ClinicSetupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\OnboardingController;
@@ -52,10 +53,10 @@ Route::middleware('guest')->group(function () {
     Route::get('/login',  [LoginController::class, 'create'])->name('login');
     Route::post('/login', [LoginController::class, 'store']);
 
-    Route::get('/auth/google',               [GoogleController::class, 'redirect'])->name('auth.google');
-    Route::get('/auth/google/callback',      [GoogleController::class, 'callback']);
-    Route::get('/auth/google/clinic-setup',  [GoogleController::class, 'clinicSetup'])->name('register.clinic');
-    Route::post('/auth/google/clinic-setup', [GoogleController::class, 'clinicStore']);
+    Route::get('/auth/google',          [GoogleController::class, 'redirect'])->name('google.redirect');
+    Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->name('google.callback');
+    Route::get('/register/clinic',      [GoogleController::class, 'clinicSetup'])->name('register.clinic');
+    Route::post('/register/clinic',     [GoogleController::class, 'clinicStore'])->name('register.clinic.store');
 });
 
 // ── Authenticated ─────────────────────────────────────────────
@@ -124,6 +125,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/profile', [SettingsController::class, 'profile'])->name('profile');
         Route::put('/profile', [SettingsController::class, 'updateProfile'])->name('profile.update');
+        Route::get('/clinic/setup',  [ClinicSetupController::class, 'create'])->name('clinic.setup');
+        Route::post('/clinic/setup', [ClinicSetupController::class, 'store']);
     });
 
     // Billing actions (Stripe — Phase 4)
