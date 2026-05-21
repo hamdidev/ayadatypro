@@ -14,6 +14,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('phone')->nullable();
             $table->string('national_id')->nullable();
+            $table->string('email')->nullable()->after('phone');
             $table->date('dob')->nullable();
             $table->enum('gender', ['male', 'female'])->nullable();
             $table->enum('blood_type', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])->nullable();

@@ -17,9 +17,9 @@ class DashboardController extends Controller
 
         $appointmentsChart = Appointment::query()
             ->where('clinic_id', $clinic->id)
-            ->where('scheduled_at', '>=', now()->subMonths(12)->startOfMonth())
+            ->where('starts_at', '>=', now()->subMonths(12)->startOfMonth())
             ->select(
-                DB::raw("TO_CHAR(scheduled_at, 'YYYY-MM') as month"),
+                DB::raw("TO_CHAR(starts_at, 'YYYY-MM') as month"),
                 DB::raw('COUNT(*) as total'),
                 DB::raw("COUNT(*) FILTER (WHERE status = 'completed') as completed"),
                 DB::raw("COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled"),
@@ -27,10 +27,10 @@ class DashboardController extends Controller
             ->groupBy('month')
             ->orderBy('month')
             ->get()
-            ->map(fn($row) => [
-                'month'     => $row->month,
-                'label'     => $this->arabicMonth($row->month),
-                'total'     => (int) $row->total,
+            ->map(fn ($row) => [
+                'month' => $row->month,
+                'label' => $this->arabicMonth($row->month),
+                'total' => (int) $row->total,
                 'completed' => (int) $row->completed,
                 'cancelled' => (int) $row->cancelled,
             ]);
@@ -38,33 +38,33 @@ class DashboardController extends Controller
         $revenueChart = Invoice::query()
             ->where('clinic_id', $clinic->id)
             ->where('status', 'paid')
-            ->where('issued_at', '>=', now()->subMonths(12)->startOfMonth())
+            ->where('created_at', '>=', now()->subMonths(12)->startOfMonth())
             ->select(
-                DB::raw("TO_CHAR(issued_at, 'YYYY-MM') as month"),
+                DB::raw("TO_CHAR(created_at, 'YYYY-MM') as month"),
                 DB::raw('SUM(total) as revenue'),
             )
             ->groupBy('month')
             ->orderBy('month')
             ->get()
-            ->map(fn($row) => [
-                'month'   => $row->month,
-                'label'   => $this->arabicMonth($row->month),
+            ->map(fn ($row) => [
+                'month' => $row->month,
+                'label' => $this->arabicMonth($row->month),
                 'revenue' => (float) $row->revenue,
             ]);
 
         // Quick stats
         $stats = [
             'appointments_today' => Appointment::where('clinic_id', $clinic->id)
-                ->whereDate('scheduled_at', today())
+                ->whereDate('starts_at', today())
                 ->count(),
             'appointments_month' => Appointment::where('clinic_id', $clinic->id)
-                ->whereMonth('scheduled_at', now()->month)
-                ->whereYear('scheduled_at', now()->year)
+                ->whereMonth('starts_at', now()->month)
+                ->whereYear('starts_at', now()->year)
                 ->count(),
             'revenue_month' => Invoice::where('clinic_id', $clinic->id)
                 ->where('status', 'paid')
-                ->whereMonth('issued_at', now()->month)
-                ->whereYear('issued_at', now()->year)
+                ->whereMonth('created_at', now()->month)
+                ->whereYear('created_at', now()->year)
                 ->sum('total'),
             'pending_invoices' => Invoice::where('clinic_id', $clinic->id)
                 ->where('status', 'pending')
@@ -73,8 +73,8 @@ class DashboardController extends Controller
 
         return Inertia::render('Dashboard', [
             'appointmentsChart' => $appointmentsChart,
-            'revenueChart'      => $revenueChart,
-            'stats'             => $stats,
+            'revenueChart' => $revenueChart,
+            'stats' => $stats,
         ]);
     }
 
@@ -95,6 +95,7 @@ class DashboardController extends Controller
             '12' => 'ديسمبر',
         ];
         [, $month] = explode('-', $yearMonth);
+
         return $months[$month] ?? $yearMonth;
     }
 }

@@ -1,37 +1,80 @@
 <?php
-// app/Http/Controllers/BillingController.php
-// Stub — full Stripe implementation in Phase 4
 
 namespace App\Http\Controllers;
 
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
-use Inertia\Inertia;
+use Illuminate\Validation\ValidationException;
+use Laravel\Cashier\Exceptions\IncompletePayment;
+use Symfony\Component\HttpFoundation\RedirectResponse as SymfonyRedirect;
 
 class BillingController extends Controller
 {
-    public function subscribe(Request $request): RedirectResponse
+    public function subscribe(Request $request): SymfonyRedirect
     {
-        // Phase 4 — create Stripe subscription
-        abort(501, 'Billing coming in Phase 4');
+        $clinic = $this->clinic($request);
+
+        $validated = $request->validate([
+            'plan' => 'required|in:clinic,chain',
+        ]);
+
+        $priceId = config('billing.plans.'.$validated['plan']);
+
+        if (! $priceId) {
+            throw ValidationException::withMessages([
+                'plan' => 'هذه الباقة غير متاحة حالياً.',
+            ]);
+        }
+
+        $builder = $clinic->newSubscription('default', $priceId);
+
+        // Only seed a fresh trial for clinics that have never subscribed.
+        if (($trial = (int) config('billing.trial_days')) && ! $clinic->subscribed('default')) {
+            $builder->trialDays($trial);
+        }
+
+        try {
+            $checkout = $builder->checkout([
+                'success_url' => route('settings.billing').'?checkout=success',
+                'cancel_url' => route('settings.billing').'?checkout=cancelled',
+            ]);
+        } catch (IncompletePayment $e) {
+            return redirect()->route('cashier.payment', [
+                $e->payment->id,
+                'redirect' => route('settings.billing'),
+            ]);
+        }
+
+        return redirect($checkout->url);
     }
 
     public function cancel(Request $request): RedirectResponse
     {
-        // Phase 4 — cancel Stripe subscription
-        abort(501, 'Billing coming in Phase 4');
+        $clinic = $this->clinic($request);
+
+        $subscription = $clinic->subscription('default');
+
+        if ($subscription && ! $subscription->canceled()) {
+            $subscription->cancel();
+        }
+
+        return back()->with(
+            'success',
+            'تم إلغاء الاشتراك. سيظل نشطاً حتى نهاية الفترة الحالية.'
+        );
     }
 
-    public function portal(Request $request): RedirectResponse
+    public function portal(Request $request): SymfonyRedirect
     {
-        // Phase 4 — redirect to Stripe billing portal
-        abort(501, 'Billing coming in Phase 4');
+        $clinic = $this->clinic($request);
+
+        return $clinic->redirectToBillingPortal(route('settings.billing'));
     }
 
-    public function webhook(Request $request): Response
+    private function clinic(Request $request)
     {
-        // Phase 4 — handle Stripe webhook events
-        return response('ok', 200);
+        $this->authorize('manage-clinic', $request->user());
+
+        return $request->user()->clinic;
     }
 }

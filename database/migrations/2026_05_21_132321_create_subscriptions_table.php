@@ -13,18 +13,17 @@ return new class extends Migration
     {
         Schema::create('subscriptions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('clinic_id')->constrained()->cascadeOnDelete();
-            $table->string('stripe_id')->nullable()->unique();
-            $table->string('stripe_status')->nullable();
+            $table->foreignId('clinic_id');
+            $table->string('type');
+            $table->string('stripe_id')->unique();
+            $table->string('stripe_status');
             $table->string('stripe_price')->nullable();
-            $table->enum('plan', ['free', 'clinic', 'chain'])->default('free');
-            $table->enum('status', ['active', 'trialing', 'canceled', 'past_due'])->default('active');
-            $table->integer('quantity')->default(1);
+            $table->integer('quantity')->nullable();
             $table->timestamp('trial_ends_at')->nullable();
             $table->timestamp('ends_at')->nullable();
             $table->timestamps();
 
-            $table->index(['clinic_id', 'status']);
+            $table->index(['clinic_id', 'stripe_status']);
         });
     }
 

@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Auth;
 
 class Visit extends Model
 {
@@ -18,20 +18,37 @@ class Visit extends Model
         'notes',
         'diagnosis_code',
         'diagnosis_free_text',
+        'follow_up_date',      // exists in DB
         'is_signed',
         'signed_at',
         'signed_by',
-        'visited_at',
-        'status',
     ];
 
     protected $casts = [
-        'is_signed'  => 'boolean',
-        'signed_at'  => 'datetime',
-        'visited_at' => 'datetime',
+        'is_signed'      => 'boolean',
+        'signed_at'      => 'datetime',
+        'follow_up_date' => 'date',
     ];
 
-    // Relations
+    // ── Global clinic scope ──────────────────────
+    protected static function booted(): void
+    {
+        static::addGlobalScope('clinic', function (Builder $query) {
+            if (auth()->check()) {
+                $query->where('visits.clinic_id', auth()->user()->clinic_id);
+            }
+        });
+    }
+
+    // ── Accessor ─────────────────────────────────
+    public function getFullDiagnosisAttribute(): string
+    {
+        return collect([$this->diagnosis_code, $this->diagnosis_free_text])
+            ->filter()
+            ->implode(' — ');
+    }
+
+    // ── Relations ────────────────────────────────
     public function patient(): BelongsTo
     {
         return $this->belongsTo(Patient::class);
@@ -67,7 +84,7 @@ class Visit extends Model
         return $this->hasMany(Attachment::class);
     }
 
-    // Actions
+    // ── Actions ──────────────────────────────────
     public function sign(int $userId): void
     {
         $this->update([
@@ -84,11 +101,5 @@ class Visit extends Model
             'signed_at' => null,
             'signed_by' => null,
         ]);
-    }
-
-    // Scopes
-    public function scopeForClinic($query, int $clinicId)
-    {
-        return $query->where('clinic_id', $clinicId);
     }
 }

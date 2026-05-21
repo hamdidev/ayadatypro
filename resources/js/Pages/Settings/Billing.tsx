@@ -1,6 +1,6 @@
 // resources/js/Pages/Settings/Billing.tsx
 
-import { Head, Link } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
 import AppLayout from "../../Layouts/AppLayout";
 import { Check, Zap } from "lucide-react";
 
@@ -12,11 +12,17 @@ interface Plan {
     features: string[];
 }
 
+interface Subscription {
+    status: string;
+    ends_at: string | null;
+    on_grace_period: boolean;
+}
+
 interface Props {
     plan: string;
     trialEndsAt: string | null;
     isOnTrial: boolean;
-    subscription: { status: string; ends_at: string | null } | null;
+    subscription: Subscription | null;
     plans: Plan[];
 }
 
@@ -54,17 +60,49 @@ export default function SettingsBilling({
                                     الفترة التجريبية تنتهي {trialEndsAt}
                                 </p>
                             )}
-                            {subscription?.status === "canceled" && (
+                            {subscription?.on_grace_period && (
                                 <p className="text-sm text-red-600 mt-1">
                                     الباقة ستنتهي {subscription.ends_at}
                                 </p>
                             )}
                         </div>
-                        {plan !== "free" && (
-                            <span className="text-xs bg-primary-50 text-primary-700 border border-primary-200 px-3 py-1.5 rounded-full font-medium">
-                                نشطة
-                            </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                            {plan !== "free" && (
+                                <span className="text-xs bg-primary-50 text-primary-700 border border-primary-200 px-3 py-1.5 rounded-full font-medium">
+                                    نشطة
+                                </span>
+                            )}
+                            {subscription && (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        router.get(route("billing.portal"))
+                                    }
+                                    className="btn-secondary text-xs"
+                                >
+                                    إدارة الفوترة
+                                </button>
+                            )}
+                            {subscription && !subscription.on_grace_period && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (
+                                            confirm(
+                                                "هل أنت متأكد من إلغاء الاشتراك؟ سيظل نشطاً حتى نهاية الفترة الحالية."
+                                            )
+                                        ) {
+                                            router.post(
+                                                route("billing.cancel")
+                                            );
+                                        }
+                                    }}
+                                    className="btn-danger text-xs"
+                                >
+                                    إلغاء الاشتراك
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -118,12 +156,13 @@ export default function SettingsBilling({
                                 ))}
                             </ul>
 
-                            {p.key !== plan ? (
+                            {p.key !== plan && p.price > 0 ? (
                                 <button
+                                    type="button"
                                     onClick={() =>
-                                        alert(
-                                            "Stripe integration coming in Phase 4",
-                                        )
+                                        router.post(route("billing.subscribe"), {
+                                            plan: p.key,
+                                        })
                                     }
                                     className={
                                         p.key === "clinic"
@@ -132,21 +171,19 @@ export default function SettingsBilling({
                                     }
                                 >
                                     <Zap size={14} />
-                                    {p.price > 0 ? "ترقية" : "تخفيض"}
+                                    ترقية
                                 </button>
-                            ) : (
+                            ) : p.key === plan ? (
                                 <div className="w-full py-2 text-center text-xs text-gray-400">
                                     باقتك الحالية
+                                </div>
+                            ) : (
+                                <div className="w-full py-2 text-center text-xs text-gray-400">
+                                    —
                                 </div>
                             )}
                         </div>
                     ))}
-                </div>
-
-                {/* Phase 4 note */}
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
-                    💳 ستتوفر إدارة الاشتراكات والفوترة قريباً. للترقية الآن
-                    تواصل معنا على support@ayadatypro.com
                 </div>
             </div>
         </AppLayout>

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -10,7 +11,7 @@ use Laravel\Cashier\Billable;
 
 class Clinic extends Model
 {
-    use SoftDeletes, Billable;
+    use Billable, HasFactory, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -82,14 +83,19 @@ class Clinic extends Model
         return $this->hasMany(Invoice::class);
     }
 
-    public function subscription(): HasMany
+    public function branches(): HasMany
     {
-        return $this->hasMany(Subscription::class);
+        return $this->hasMany(Branch::class);
     }
 
-    public function activeSubscription()
+    public function mainBranch(): HasOne
     {
-        return $this->hasOne(Subscription::class)->latestOfMany();
+        return $this->hasOne(Branch::class)->where('is_main', true);
+    }
+
+    public function activeBranches(): HasMany
+    {
+        return $this->hasMany(Branch::class)->where('is_active', true);
     }
 
     public function settings(): HasOne

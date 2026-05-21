@@ -10,11 +10,15 @@ use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\AvatarController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\BookingPortalController;
+use App\Http\Controllers\BranchController;
 use App\Http\Controllers\ClinicSetupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\PatientController;
+use App\Http\Controllers\Portal\PatientPortalController;
+use App\Http\Controllers\PublicProfileController;
+use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VisitController;
@@ -34,8 +38,8 @@ Route::post('/book/{clinicSlug}',              [BookingPortalController::class, 
 Route::get('/book/{clinicSlug}/slots',         [BookingPortalController::class, 'availableSlots'])->name('booking.slots');
 Route::get('/book/{clinicSlug}/confirmation',  [BookingPortalController::class, 'confirmation'])->name('booking.confirmation');
 
-// Stripe webhook — no session, excluded from CSRF in bootstrap/app.php
-Route::post('/stripe/webhook', [BillingController::class, 'webhook'])->name('stripe.webhook');
+// Cashier auto-registers /stripe/webhook (POST) and /stripe/payment/{id} (GET).
+// The webhook is excluded from CSRF in bootstrap/app.php.
 
 // ── Guest-only ────────────────────────────────────────────────
 Route::middleware('guest')->group(function () {
@@ -128,9 +132,43 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/clinic/setup',  [ClinicSetupController::class, 'create'])->name('clinic.setup');
         Route::post('/clinic/setup', [ClinicSetupController::class, 'store']);
     });
+    // Branches (Chain plan)
+    Route::resource('branches', BranchController::class)->except(['show', 'create', 'edit']);
 
     // Billing actions (Stripe — Phase 4)
     Route::post('/billing/subscribe', [BillingController::class, 'subscribe'])->name('billing.subscribe');
     Route::post('/billing/cancel',    [BillingController::class, 'cancel'])->name('billing.cancel');
     Route::get('/billing/portal',     [BillingController::class, 'portal'])->name('billing.portal');
+});
+Route::get('/clinic/{slug}', [PublicProfileController::class, 'show'])
+    ->name('clinic.public');
+
+
+Route::prefix('reports')->name('reports.')->middleware(['auth', 'can:see-finances'])->group(function () {
+    Route::get('/',              [ReportsController::class, 'index'])->name('index');
+    Route::get('/revenue',       [ReportsController::class, 'revenue'])->name('revenue');
+    Route::get('/clinical',      [ReportsController::class, 'clinical'])->name('clinical');
+    Route::get('/appointments',  [ReportsController::class, 'appointments'])->name('appointments');
+    Route::get('/patients',      [ReportsController::class, 'patients'])->name('patients');
+    Route::get('/operational',   [ReportsController::class, 'operational'])->name('operational');
+    Route::post('/flush',        [ReportsController::class, 'flush'])->name('flush');
+});
+
+// ── Patient Portal ──────────────────────────────────────────
+Route::prefix('portal')->name('portal.')->group(function () {
+
+    // Public (no auth)
+    Route::get('/login',           [PatientPortalController::class, 'loginForm'])->name('login');
+    Route::post('/login',          [PatientPortalController::class, 'sendLink'])->name('send-link');
+    Route::get('/verify/{token}',  [PatientPortalController::class, 'verify'])->name('verify');
+    Route::post('/logout',         [PatientPortalController::class, 'logout'])->name('logout');
+
+    // Authenticated patient
+    Route::middleware('auth.patient')->group(function () {
+        Route::get('/dashboard',               [PatientPortalController::class, 'dashboard'])->name('dashboard');
+        Route::get('/appointments',            [PatientPortalController::class, 'appointments'])->name('appointments');
+        Route::post('/appointments/{id}/cancel', [PatientPortalController::class, 'cancelAppointment'])->name('appointments.cancel');
+        Route::get('/visits',                  [PatientPortalController::class, 'visits'])->name('visits');
+        Route::get('/invoices',                [PatientPortalController::class, 'invoices'])->name('invoices');
+    });
 });

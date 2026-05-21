@@ -2,18 +2,28 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
 
 class Attachment extends Model
 {
+    protected static function booted(): void
+    {
+        static::addGlobalScope('clinic', function (Builder $query) {
+            if (auth()->check()) {
+                $query->where('clinic_id', auth()->user()->clinic_id);
+            }
+        });
+    }
+
     protected $fillable = [
         'visit_id',
         'patient_id',
         'clinic_id',
         'uploaded_by',
-        'file_name',
+        'original_name',  // matches what controller passes
         'file_path',
         'file_type',
         'file_size',

@@ -304,15 +304,17 @@ class SettingsController extends Controller
     {
         $this->authorize('manage-clinic');
 
-        $clinic = auth()->user()->clinic->load('activeSubscription');
+        $clinic = auth()->user()->clinic;
+        $subscription = $clinic->subscription('default');
 
         return Inertia::render('Settings/Billing', [
             'plan'          => $clinic->subscription_plan,
             'trialEndsAt'   => $clinic->trial_ends_at?->format('Y-m-d'),
-            'isOnTrial'     => $clinic->trial_ends_at?->isFuture() ?? false,
-            'subscription'  => $clinic->activeSubscription ? [
-                'status'    => $clinic->activeSubscription->status,
-                'ends_at'   => $clinic->activeSubscription->ends_at?->format('Y-m-d'),
+            'isOnTrial'     => $clinic->onTrial('default'),
+            'subscription'  => $subscription ? [
+                'status'    => $subscription->stripe_status,
+                'ends_at'   => $subscription->ends_at?->format('Y-m-d'),
+                'on_grace_period' => $subscription->onGracePeriod(),
             ] : null,
             'plans' => [
                 [

@@ -6,6 +6,7 @@ use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Patient;
 use App\Models\Visit;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -17,27 +18,26 @@ class InvoiceController extends Controller
     public function index(Request $request): Response
     {
         $invoices = Invoice::with(['patient'])
-            ->when($request->status, fn($q) => $q->where('status', $request->status))
-            ->when($request->search, fn($q) => $q->whereHas(
+            ->when($request->status, fn ($q) => $q->where('status', $request->status))
+            ->when($request->search, fn ($q) => $q->whereHas(
                 'patient',
-                fn($p) =>
-                $p->where('name', 'ILIKE', "%{$request->search}%")
+                fn ($p) => $p->where('name', 'ILIKE', "%{$request->search}%")
             ))
-            ->when($request->month, fn($q) => $q->whereMonth('created_at', $request->month))
+            ->when($request->month, fn ($q) => $q->whereMonth('created_at', $request->month))
             ->orderByDesc('created_at')
             ->paginate(20)
             ->withQueryString()
-            ->through(fn(Invoice $inv) => [
-                'id'             => $inv->id,
+            ->through(fn (Invoice $inv) => [
+                'id' => $inv->id,
                 'invoice_number' => $inv->invoice_number,
-                'patient'        => $inv->patient->name,
-                'total'          => $inv->total,
-                'amount_paid'    => $inv->amount_paid,
-                'balance_due'    => $inv->balance_due,
-                'status'         => $inv->status,
+                'patient' => $inv->patient->name,
+                'total' => $inv->total,
+                'amount_paid' => $inv->amount_paid,
+                'balance_due' => $inv->balance_due,
+                'status' => $inv->status,
                 'payment_method' => $inv->payment_method,
-                'created_at'     => $inv->created_at->format('Y-m-d'),
-                'paid_at'        => $inv->paid_at?->format('Y-m-d'),
+                'created_at' => $inv->created_at->format('Y-m-d'),
+                'paid_at' => $inv->paid_at?->format('Y-m-d'),
             ]);
 
         // Revenue summary for the month
@@ -51,8 +51,8 @@ class InvoiceController extends Controller
 
         return Inertia::render('Invoices/Index', [
             'invoices' => $invoices,
-            'summary'  => $summary,
-            'filters'  => $request->only(['status', 'search', 'month']),
+            'summary' => $summary,
+            'filters' => $request->only(['status', 'search', 'month']),
             'currency' => auth()->user()->clinic->currency ?? 'SAR',
         ]);
     }
@@ -76,10 +76,10 @@ class InvoiceController extends Controller
 
         return Inertia::render('Invoices/Create', [
             'preselectedPatient' => $patient ? [
-                'id'   => $patient->id,
+                'id' => $patient->id,
                 'name' => $patient->name,
             ] : null,
-            'visitId'  => $visit?->id,
+            'visitId' => $visit?->id,
             'currency' => auth()->user()->clinic->currency ?? 'SAR',
         ]);
     }
@@ -87,40 +87,40 @@ class InvoiceController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'patient_id'     => ['required', 'integer', 'exists:patients,id'],
-            'visit_id'       => ['nullable', 'integer', 'exists:visits,id'],
-            'discount'       => ['nullable', 'numeric', 'min:0'],
-            'notes'          => ['nullable', 'string', 'max:500'],
+            'patient_id' => ['required', 'integer', 'exists:patients,id'],
+            'visit_id' => ['nullable', 'integer', 'exists:visits,id'],
+            'discount' => ['nullable', 'numeric', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:500'],
             'payment_method' => ['nullable', Rule::in(['cash', 'card', 'bank_transfer'])],
-            'status'         => ['required', Rule::in(['pending', 'paid', 'partial'])],
-            'amount_paid'    => ['nullable', 'numeric', 'min:0'],
+            'status' => ['required', Rule::in(['pending', 'paid', 'partial'])],
+            'amount_paid' => ['nullable', 'numeric', 'min:0'],
 
-            'items'              => ['required', 'array', 'min:1'],
+            'items' => ['required', 'array', 'min:1'],
             'items.*.description' => ['required', 'string', 'max:255'],
-            'items.*.quantity'   => ['required', 'integer', 'min:1'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.unit_price' => ['required', 'numeric', 'min:0'],
         ]);
 
         $invoice = Invoice::create([
-            'clinic_id'      => auth()->user()->clinic_id,
-            'patient_id'     => $data['patient_id'],
-            'visit_id'       => $data['visit_id'] ?? null,
-            'discount'       => $data['discount'] ?? 0,
-            'notes'          => $data['notes'] ?? null,
+            'clinic_id' => auth()->user()->clinic_id,
+            'patient_id' => $data['patient_id'],
+            'visit_id' => $data['visit_id'] ?? null,
+            'discount' => $data['discount'] ?? 0,
+            'notes' => $data['notes'] ?? null,
             'payment_method' => $data['payment_method'] ?? null,
-            'status'         => $data['status'],
-            'amount_paid'    => $data['amount_paid'] ?? 0,
-            'subtotal'       => 0, // recalculated after items are created
-            'total'          => 0,
+            'status' => $data['status'],
+            'amount_paid' => $data['amount_paid'] ?? 0,
+            'subtotal' => 0, // recalculated after items are created
+            'total' => 0,
         ]);
 
         // Create line items — InvoiceItem::saved() calls recalculateTotals()
         foreach ($data['items'] as $item) {
             $invoice->items()->create([
                 'description' => $item['description'],
-                'quantity'    => $item['quantity'],
-                'unit_price'  => $item['unit_price'],
-                'total'       => $item['quantity'] * $item['unit_price'],
+                'quantity' => $item['quantity'],
+                'unit_price' => $item['unit_price'],
+                'total' => $item['quantity'] * $item['unit_price'],
             ]);
         }
 
@@ -137,36 +137,36 @@ class InvoiceController extends Controller
 
         return Inertia::render('Invoices/Show', [
             'invoice' => [
-                'id'             => $invoice->id,
+                'id' => $invoice->id,
                 'invoice_number' => $invoice->invoice_number,
-                'status'         => $invoice->status,
-                'subtotal'       => $invoice->subtotal,
-                'discount'       => $invoice->discount,
-                'total'          => $invoice->total,
-                'amount_paid'    => $invoice->amount_paid,
-                'balance_due'    => $invoice->balance_due,
+                'status' => $invoice->status,
+                'subtotal' => $invoice->subtotal,
+                'discount' => $invoice->discount,
+                'total' => $invoice->total,
+                'amount_paid' => $invoice->amount_paid,
+                'balance_due' => $invoice->balance_due,
                 'payment_method' => $invoice->payment_method,
-                'notes'          => $invoice->notes,
-                'created_at'     => $invoice->created_at->format('Y-m-d'),
-                'paid_at'        => $invoice->paid_at?->format('Y-m-d'),
+                'notes' => $invoice->notes,
+                'created_at' => $invoice->created_at->format('Y-m-d'),
+                'paid_at' => $invoice->paid_at?->format('Y-m-d'),
 
                 'patient' => [
-                    'id'    => $invoice->patient->id,
-                    'name'  => $invoice->patient->name,
+                    'id' => $invoice->patient->id,
+                    'name' => $invoice->patient->name,
                     'phone' => $invoice->patient->phone,
                 ],
 
                 'visit' => $invoice->visit ? [
-                    'id'     => $invoice->visit->id,
+                    'id' => $invoice->visit->id,
                     'doctor' => $invoice->visit->doctor->name,
                 ] : null,
 
-                'items' => $invoice->items->map(fn(InvoiceItem $item) => [
-                    'id'          => $item->id,
+                'items' => $invoice->items->map(fn (InvoiceItem $item) => [
+                    'id' => $item->id,
                     'description' => $item->description,
-                    'quantity'    => $item->quantity,
-                    'unit_price'  => $item->unit_price,
-                    'total'       => $item->total,
+                    'quantity' => $item->quantity,
+                    'unit_price' => $item->unit_price,
+                    'total' => $item->total,
                 ]),
             ],
             'currency' => auth()->user()->clinic->currency ?? 'SAR',
@@ -184,21 +184,21 @@ class InvoiceController extends Controller
 
         return Inertia::render('Invoices/Edit', [
             'invoice' => [
-                'id'             => $invoice->id,
+                'id' => $invoice->id,
                 'invoice_number' => $invoice->invoice_number,
-                'patient_id'     => $invoice->patient_id,
-                'patient'        => $invoice->patient->name,
-                'visit_id'       => $invoice->visit_id,
-                'discount'       => $invoice->discount,
-                'notes'          => $invoice->notes,
-                'status'         => $invoice->status,
+                'patient_id' => $invoice->patient_id,
+                'patient' => $invoice->patient->name,
+                'visit_id' => $invoice->visit_id,
+                'discount' => $invoice->discount,
+                'notes' => $invoice->notes,
+                'status' => $invoice->status,
                 'payment_method' => $invoice->payment_method,
-                'amount_paid'    => $invoice->amount_paid,
-                'items'          => $invoice->items->map(fn(InvoiceItem $item) => [
-                    'id'          => $item->id,
+                'amount_paid' => $invoice->amount_paid,
+                'items' => $invoice->items->map(fn (InvoiceItem $item) => [
+                    'id' => $item->id,
                     'description' => $item->description,
-                    'quantity'    => $item->quantity,
-                    'unit_price'  => $item->unit_price,
+                    'quantity' => $item->quantity,
+                    'unit_price' => $item->unit_price,
                 ]),
             ],
             'currency' => auth()->user()->clinic->currency ?? 'SAR',
@@ -212,24 +212,24 @@ class InvoiceController extends Controller
         }
 
         $data = $request->validate([
-            'discount'       => ['nullable', 'numeric', 'min:0'],
-            'notes'          => ['nullable', 'string', 'max:500'],
+            'discount' => ['nullable', 'numeric', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:500'],
             'payment_method' => ['nullable', Rule::in(['cash', 'card', 'bank_transfer'])],
-            'status'         => ['required', Rule::in(['pending', 'paid', 'partial'])],
-            'amount_paid'    => ['nullable', 'numeric', 'min:0'],
+            'status' => ['required', Rule::in(['pending', 'paid', 'partial'])],
+            'amount_paid' => ['nullable', 'numeric', 'min:0'],
 
-            'items'              => ['required', 'array', 'min:1'],
+            'items' => ['required', 'array', 'min:1'],
             'items.*.description' => ['required', 'string', 'max:255'],
-            'items.*.quantity'   => ['required', 'integer', 'min:1'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.unit_price' => ['required', 'numeric', 'min:0'],
         ]);
 
         $invoice->update([
-            'discount'       => $data['discount'] ?? 0,
-            'notes'          => $data['notes'] ?? null,
+            'discount' => $data['discount'] ?? 0,
+            'notes' => $data['notes'] ?? null,
             'payment_method' => $data['payment_method'] ?? null,
-            'status'         => $data['status'],
-            'amount_paid'    => $data['amount_paid'] ?? 0,
+            'status' => $data['status'],
+            'amount_paid' => $data['amount_paid'] ?? 0,
         ]);
 
         // Replace all items
@@ -238,9 +238,9 @@ class InvoiceController extends Controller
         foreach ($data['items'] as $item) {
             $invoice->items()->create([
                 'description' => $item['description'],
-                'quantity'    => $item['quantity'],
-                'unit_price'  => $item['unit_price'],
-                'total'       => $item['quantity'] * $item['unit_price'],
+                'quantity' => $item['quantity'],
+                'unit_price' => $item['unit_price'],
+                'total' => $item['quantity'] * $item['unit_price'],
             ]);
         }
 
@@ -256,7 +256,7 @@ class InvoiceController extends Controller
     public function recordPayment(Request $request, Invoice $invoice): RedirectResponse
     {
         $data = $request->validate([
-            'amount'         => ['required', 'numeric', 'min:0.01', "max:{$invoice->balance_due}"],
+            'amount' => ['required', 'numeric', 'min:0.01', "max:{$invoice->balance_due}"],
             'payment_method' => ['required', Rule::in(['cash', 'card', 'bank_transfer'])],
         ]);
 
@@ -264,16 +264,17 @@ class InvoiceController extends Controller
 
         return back()->with('success', 'تم تسجيل الدفعة بنجاح.');
     }
+
     public function pdf(Invoice $invoice): \Illuminate\Http\Response
     {
         $this->authorize('view', $invoice);
 
-        $invoice->load(['patient', 'clinic', 'items', 'appointment']);
+        $invoice->load(['patient', 'clinic', 'items', 'visit']);
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.invoice', compact('invoice'))
+        $pdf = Pdf::loadView('pdf.invoice', compact('invoice'))
             ->setPaper('a4', 'portrait');
 
-        $filename = 'invoice-' . $invoice->number . '.pdf';
+        $filename = 'invoice-'.$invoice->invoice_number.'.pdf';
 
         return $pdf->download($filename);
     }
